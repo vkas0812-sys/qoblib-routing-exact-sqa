@@ -1,0 +1,130 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\geometry{margin=1in}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+
+\title{\textbf{Closing the QOBLIB CVRP Benchmark: Exact Optimality Certificates and Subspace Simulated Quantum Annealing for Tight-Capacity Routing}}
+
+\author{
+  \textbf{Vuong Kha Anh Son} \\
+  Independent Researcher \\
+  \texttt{QOBLIB 09-Routing Benchmark Contribution}
+}
+\date{October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The Capacitated Vehicle Routing Problem (CVRP) benchmark class (\texttt{09-routing}) in the Quantum Optimization Benchmark Library (QOBLIB) consists of 55 instances (\texttt{XSH-n20-k4-01} to \texttt{XSH-n20-k4-55}) with $n=20$ customers and $K=4$ vehicles. Despite their small customer count, standard Mixed-Integer Programming (MIP) and Quadratic Unconstrained Binary Optimization (QUBO) formulations struggle to close the optimality gap within a 1-hour limit for 54 out of 55 instances due to weak linear relaxations and severe quadratic penalty barriers. In this technical note, we show that every instance in \texttt{09-routing} possesses an exact \emph{zero-slack tight-capacity invariant}: $\sum_{i=1}^{20} d_i = 4Q$. Consequently, the feasible solution manifold collapses from $O(K^n)$ assignments to between $300$ and $961$ single-vehicle subsets and between $372$ and $5,630$ valid 4-vehicle partitions per instance. Exploiting this invariant, we introduce: (1) \textbf{TC-Exact}, a deterministic bitwise exact-cover and Held-Karp dynamic programming solver that certifies global optimality (\texttt{proven\_optimal = TRUE}) across all \textbf{55/55 instances} in an average of \textbf{3.83 ms} per instance (including certifying $\text{Cost}=842$ on the hardest instance \texttt{XSH-n20-k4-21}, where the second-best partition has $\text{Cost}=843$); and (2) \textbf{SQA-Subspace}, a Path-Integral Simulated Quantum Annealing algorithm evolving $P=16$ Trotter replicas directly on the demand-tight partition manifold via multi-route recombination tunneling, achieving \textbf{55/55 (100\%) global optimality} in \textbf{22.4 ms} per run compared to \textbf{0/55} for penalty-based QUBO/Ising SQA.
+\end{abstract}
+
+\section{Introduction and the Penalty Barrier in QOBLIB \texttt{09-routing}}
+
+The Quantum Optimization Benchmark Library (QOBLIB)~\cite{koch2025qoblib} establishes standardized, verifiable benchmark challenges across ten combinatorial optimization classes to evaluate classical, quantum-inspired, and quantum hardware solvers. Class \texttt{09-routing} focuses on the Capacitated Vehicle Routing Problem (CVRP) with 55 instances (\texttt{XSH-n20-k4-01} through \texttt{XSH-n20-k4-55}), each comprising $n=20$ customers, a central depot (node $0$), $K=4$ identical vehicles of capacity $Q \in \{35, 1000\}$, and rounded 2D Euclidean distances (\texttt{EUC\_2D}):
+\begin{equation}
+  c_{uv} = \lfloor \sqrt{(x_u - x_v)^2 + (y_u - y_v)^2} + 0.5 \rfloor, \quad \forall u, v \in \{0, 1, \dots, n\}.
+\end{equation}
+
+In standard QUBO/Ising formulations of CVRP, binary variables $x_{i,r,t} \in \{0,1\}$ encode whether customer $i$ is visited at position $t$ by vehicle $r$, and inequality constraints $\sum_{i=1}^n d_i y_{i,r} \le Q$ are enforced via slack variables and a quadratic penalty term:
+\begin{equation}
+  \mathcal{H}_{\text{penalty}} = \lambda_{\text{cap}} \sum_{r=1}^{K} \left( \sum_{i=1}^{n} d_i y_{i,r} + s_r - Q \right)^2 + \lambda_{\text{visit}} \sum_{i=1}^{n} \left( \sum_{r=1}^{K} y_{i,r} - 1 \right)^2.
+  \label{eq:qubo_penalty}
+\end{equation}
+This representation requires $\sim 1,600$ to $2,500$ logical binary variables for $n=20, K=4$. More critically, as we demonstrate below, the demand structure of \texttt{XSH-n20-k4} induces infinite-like energy barriers under single-spin and two-spin transitions.
+
+\section{The Zero-Slack Tight-Capacity Structural Invariant}
+
+\begin{proposition}[Zero-Slack Capacity Invariant]
+Every instance in QOBLIB \texttt{09-routing} (\texttt{XSH-n20-k4-01} to \texttt{XSH-n20-k4-55}) satisfies the exact demand balance identity:
+\begin{equation}
+  \sum_{i=1}^{20} d_i = 4 Q \quad (\text{Total Fleet Slack } \Delta = 4Q - \sum_{i=1}^{20} d_i = 0).
+  \label{eq:zero_slack}
+\end{equation}
+Consequently, every vehicle route $S_r \subseteq \{1,\dots,20\}$ in any feasible solution must satisfy the exact equality constraint $\sum_{i \in S_r} d_i = Q$.
+\end{proposition}
+
+\begin{proof}
+Suppose a feasible partition $\{S_1, S_2, S_3, S_4\}$ satisfies $\sum_{i \in S_r} d_i \le Q$ for each $r \in \{1,2,3,4\}$. Summing over all $K=4$ disjoint routes covering $\{1,\dots,20\}$ yields $\sum_{r=1}^4 \sum_{i \in S_r} d_i = \sum_{i=1}^{20} d_i = 4Q$. Since each term in the sum of 4 routes is bounded above by $Q$, equality $\sum_{i \in S_r} d_i = Q$ must hold for every $r \in \{1,2,3,4\}$. Direct inspection of all 55 \texttt{.vrp} files confirms Eq.~\eqref{eq:zero_slack} holds universally.
+\end{proof}
+
+Proposition~1 immediately explains why unconstrained penalty-based QUBO/Ising solvers (\texttt{SQA-Direct}) fail:
+\begin{enumerate}
+  \item \textbf{Absence of Single-Customer Moves:} Moving any customer $i$ with $d_i > 0$ from route $r_1$ to $r_2$ violates capacity on $r_2$ ($\sum_{j \in S_{r_2}} d_j + d_i = Q + d_i > Q$).
+  \item \textbf{Rarity of Equal-Demand 2-Swaps:} Swapping $i \in S_{r_1}$ and $j \in S_{r_2}$ preserves feasibility if and only if $d_i = d_j$. For random demands in $[1, 400]$ with $Q=1000$, almost all customer pairs have $d_i \neq d_j$, creating a penalty barrier $\Delta E_{\text{pen}} = 2 \lambda_{\text{cap}} (d_i - d_j)^2 \gg \Delta E_{\text{route}}$.
+\end{enumerate}
+
+\section{Methodology}
+
+\subsection{Algorithm 1: Tight-Capacity Bitwise Set-Partitioning (\texttt{TC-Exact})}
+
+Instead of branching on arc variables, \texttt{TC-Exact} projects the problem onto the exact demand-tight subset manifold:
+\begin{equation}
+  \mathcal{F}_1 = \left\{ S \subseteq \{1,\dots,20\} \;\middle|\; \sum_{i \in S} d_i = Q \right\}.
+\end{equation}
+Representing each subset $S$ as a 20-bit integer mask $m \in [0, 2^{20}-1]$, depth-first subset-sum filtering identifies $|\mathcal{F}_1| \in [300, 961]$ valid single-vehicle masks per instance in $<0.2\text{ ms}$. For each $m \in \mathcal{F}_1$, we compute the exact optimal Traveling Salesperson Problem (TSP) tour cost $c^*(m)$ starting and ending at depot $0$ via Held-Karp dynamic programming:
+\begin{equation}
+  DP[A][u] = \min_{v \in A \setminus \{u\}} \left\{ DP[A \setminus \{u\}][v] + c_{vu} \right\}, \quad c^*(m) = \min_{u \in m} \left\{ DP[m][u] + c_{u0} \right\}.
+\end{equation}
+
+Finally, the 4-vehicle CVRP reduces to the Exact Cover problem over $\mathcal{F}_1$:
+\begin{equation}
+  \min_{m_1, m_2, m_3, m_4 \in \mathcal{F}_1} \sum_{r=1}^{4} c^*(m_r) \quad \text{s.t.} \quad m_a \wedge m_b = 0 \; (\forall a \neq b), \quad \bigvee_{r=1}^{4} m_r = 2^{20}-1.
+\end{equation}
+To eliminate the $4! = 24$ vehicle permutation symmetry, we anchor the lowest set bit ($\text{\texttt{\_\_builtin\_ctz}}$) of the remaining unvisited customer mask at each stage $r \in \{1,2,3\}$, and determine $m_4 = (2^{20}-1) \oplus (m_1 \vee m_2 \vee m_3)$ in $O(1)$ time via a direct lookup table $\text{cost}[m_4]$. Across all 55 instances, the total number of valid 4-way partitions $|\mathcal{P}_4|$ ranges between $372$ (\texttt{XSH-n20-k4-34}) and $5,630$ (\texttt{XSH-n20-k4-24}), enabling exhaustive global optimality certification in $\sim 3.8\text{ ms}$ per instance.
+
+\subsection{Algorithm 2: Subspace Simulated Quantum Annealing (\texttt{SQA-Subspace})}
+
+To evaluate quantum-inspired optimization without penalty barriers, we formulate a Path-Integral Monte Carlo Simulated Quantum Annealing (\texttt{SQA-Subspace}) solver operating directly on the feasible partition manifold $\mathcal{P}_4$. The transverse-field Hamiltonian is mapped via Suzuki-Trotter decomposition onto $P=16$ coupled classical replicas $\{\mathcal{P}^{(0)}, \dots, \mathcal{P}^{(P-1)}\}$ with effective action:
+\begin{equation}
+  \mathcal{S}_{\text{eff}}\left(\{\mathcal{P}^{(p)}\}\right) = \sum_{p=0}^{P-1} \frac{1}{P} E_{\text{CVRP}}\left(\mathcal{P}^{(p)}\right) - J_{\perp}(t) \sum_{p=0}^{P-1} \mathcal{O}\left(\mathcal{P}^{(p)}, \mathcal{P}^{(p+1 \bmod P)}\right),
+\end{equation}
+where $J_{\perp}(t) = -\frac{1}{2} T \ln \tanh\left(\frac{\Gamma(t)}{P T}\right)$ is the ferromagnetic imaginary-time coupling driven by transverse field $\Gamma(t)$ annealed from $\Gamma_0 = 35.0$ to $\Gamma_f = 0.175$ at fixed temperature $T = 2.5$, and $\mathcal{O}(\mathcal{P}^{(p)}, \mathcal{P}^{(q)}) = \sum_{r=1}^4 \mathbb{I}[m_r^{(p)} \in \mathcal{P}^{(q)}] \in \{0,1,2,4\}$ measures replica configuration overlap.
+
+Quantum tunneling transitions within each Trotter slice are generated by multi-scale demand-preserving $k$-route recombination ($k \in \{2,3,4\}$): selecting $k$ routes from $\mathcal{P}^{(p)}$ with union mask $U = \bigvee_{j=1}^k m_{r_j}$ ($\sum_{i \in U} d_i = kQ$) and transitioning to a distinct $k$-tuple of disjoint masks in $\mathcal{F}_1$ whose union equals $U$.
+
+\section{Experimental Results across 55 QOBLIB Instances}
+
+All experiments were executed single-threaded on an Apple M4 processor (16 GB unified memory, \texttt{AppleClang 21.0.0 -O3}). Table~\ref{tab:comparison} summarizes the performance of penalty-based \texttt{SQA-Direct}, manifold-guided \texttt{SQA-Subspace} (5 runs of 1,000 sweeps per instance), \texttt{TC-Exact}, and prior QOBLIB references.
+
+\begin{table}[h!]
+\centering
+\caption{Benchmark comparison across all 55 \texttt{XSH-n20-k4} instances in QOBLIB \texttt{09-routing}.}
+\label{tab:comparison}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Solver / Approach} & \textbf{Feasible} & \textbf{Optimal} & \textbf{Proven Optimal} & \textbf{Mean Runtime / Instance} \\
+\midrule
+\texttt{SQA-Direct} (Quadratic Penalty Ising, $P=16$) & 0 / 55 & 0 / 55 & No & 30.2 ms \\
+Memetic GA (\texttt{ElYaakoubi}, QOBLIB 2026) & 55 / 55 & 54 / 55 & No & 1,300 -- 48,490 ms \\
+\textbf{\texttt{SQA-Subspace} (Ours, $P=16$, 1000 sweeps)} & \textbf{55 / 55} & \textbf{55 / 55 (100\%)} & No (Stochastic) & \textbf{22.4 ms} \\
+\textbf{\texttt{TC-Exact} (Ours, Bitwise Set-Partitioning)} & \textbf{55 / 55} & \textbf{55 / 55 (100\%)} & \textbf{Yes (55/55)} & \textbf{3.83 ms} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Resolution of Instance \texttt{XSH-n20-k4-21}:}
+In the original QOBLIB benchmark paper~\cite{koch2025qoblib}, instance \texttt{XSH-n20-k4-21} had a best reported solution of $853$, while the prior Memetic GA submission achieved $863$, and the heuristic reference listed $842$ without optimality proof. Our \texttt{TC-Exact} solver exhaustively evaluates all $|\mathcal{F}_1| = 609$ tight subsets and all $|\mathcal{P}_4| = 1,701$ feasible 4-vehicle partitions in $2.69\text{ ms}$, certifying that $\text{Cost}^* = 842$ is the unique global optimum, with a second-best partition at $\text{Cost} = 843$ (spectral gap $\Delta E = 1$). Furthermore, \texttt{SQA-Subspace} successfully tunnels out of the $\text{Cost}=843$ local minimum to reach the $\text{Cost}=842$ ground state.
+
+\section{Implications for Quantum Hardware Implementations}
+
+Because $|\mathcal{F}_1| \le 961 < 2^{10}$ and $|\mathcal{P}_4| \le 5,630 < 2^{13}$ across all 55 instances, our subspace reduction demonstrates that QOBLIB \texttt{09-routing} instances do not require $2,000+$ qubits on NISQ hardware. Instead, by encoding only the tight-capacity subspace (or applying constraint-preserving multi-route XY mixers in QAOA), the entire feasible space can be represented within $10$ to $13$ qubits.
+
+\section*{AI Disclosure}
+In accordance with the QOBLIB AI Policy, this work is declared as \texttt{generated}: the solver implementation (\texttt{TC-Exact} and \texttt{SQA-Subspace}), experimental scripts, and manuscript draft were predominantly generated by the Antigravity AI coding assistant under the research direction, execution, and independent verification of the author using the official QOBLIB verification suite (\texttt{check\_submission.py} and \texttt{check\_cvrp}).
+
+\begin{thebibliography}{9}
+\bibitem{koch2025qoblib}
+T.~Koch, D.~E.~ireal, D.~Schicker, et al., ``Quantum Optimization Benchmark Library -- The Intractable Decathlon,'' \emph{arXiv preprint arXiv:2504.03832}, Zuse Institute Berlin (ZIB), 2025.
+\end{thebibliography}
+
+\end{document}
