@@ -67,7 +67,6 @@ $$\min_{m_1, m_2, m_3, m_4 \in \mathcal{F}_1} \sum_{r=1}^4 c^*(m_r) \quad \text{
 breaking the $4! = 24$ vehicle symmetry by anchoring the lowest set bit (`__builtin_ctz`) of the remaining unvisited customers at each stage $r \in \{1, 2, 3\}$ and querying $m_4$ in $\mathcal{O}(1)$ via direct mask lookup.
 
 ### 2.2. `SQA-Subspace`: Path-Integral Simulated Quantum Annealing on the Tight Manifold
-
 - **Suzuki-Trotter Action ($P = 16$ Replicas):**
 
 $$\mathcal{S}_{\text{eff}}\left(\{\mathcal{P}^{(p)}\}_{p=0}^{P-1}\right) = \sum_{p=0}^{P-1} \frac{1}{P} E_{\text{CVRP}}\left(\mathcal{P}^{(p)}\right) - J_{\perp}(t) \sum_{p=0}^{P-1} \mathcal{O}\left(\mathcal{P}^{(p)}, \mathcal{P}^{(p+1 \bmod P)}\right),$$
@@ -76,7 +75,7 @@ where the inter-replica coupling is given by:
 
 $$J_{\perp}(t) = -\frac{1}{2} T \ln \tanh\left(\frac{\Gamma(t)}{P T}\right)$$
 
-with transverse field $\Gamma(t)$ annealed from $35.0 \to 0.175$ at $T = 2.5$.
+with transverse field $\Gamma(t)$ annealed from $35.0 \to 0.175$ over $1,000$ sweeps at $T = 6.0$.
 
 - **Multi-Route Recombination Tunneling:** Transitions within each Trotter slice select $k \in \{2, 3, 4\}$ routes, form their union mask $U = \bigvee_{j=1}^k m_{r_j}$ (total demand $kQ$), and tunnel directly to a new $k$-tuple of disjoint tight routes in $\mathcal{F}_1$ partitioning $U$.
 
@@ -92,17 +91,16 @@ with transverse field $\Gamma(t)$ annealed from $35.0 \to 0.175$ at $T = 2.5$.
 | **`TC-Exact` (Ours, Bitwise Exact Cover)** | **Classical Exact** | **55 / 55** | **55 / 55 (100.0%)** | **Yes (55/55)** | **3.33 ms** |
 
 ### Recorded Convergence Trace of `SQA-Subspace` (Run #1) on Hardest Instance `XSH-n20-k4-21`
-
-On `XSH-n20-k4-21` ($Q = 275$, $\lvert\mathcal{F}_1\rvert = 458$ tight subsets, $\lvert\mathcal{P}_4\rvert = 1,090$ valid partitions), the global optimum is `Cost = 842` and the second-best partition is `Cost = 843` (spectral gap $\Delta E = 1$):
+On `XSH-n20-k4-21` ($Q = 275$, $\lvert\mathcal{F}_1\rvert = 458$ tight subsets, $\lvert\mathcal{P}_4\rvert = 1,090$ valid partitions), the global optimum is `Cost = 842` and the second-best partition is `Cost = 843` (spectral gap $\Delta E = 1$). One sweep = $P = 16$ replica updates; the recorded counter is the cumulative replica-update index (sweep $= \lceil \text{update}/16 \rceil$). Subspace preprocessing (enumeration of $\mathcal{F}_1$, $\mathcal{P}_4$ and the neighbour graph) takes $3.718$ ms; times below are measured from the start of annealing:
 
 ```text
-  Sweep    1 (t =  3.72 ms)  -->  Incumbent Cost = 870
-  Sweep    2 (t =  3.72 ms)  -->  Incumbent Cost = 860
-  Sweep   17 (t =  3.72 ms)  -->  Incumbent Cost = 847
-  Sweep  160 (t =  3.72 ms)  -->  Incumbent Cost = 846
-  Sweep  296 (t =  3.73 ms)  -->  Incumbent Cost = 845
-  Sweep  694 (t =  3.74 ms)  -->  Incumbent Cost = 843
-  Sweep 1154 (t =  3.76 ms)  -->  Incumbent Cost = 842
+  Update    1  (Sweep  1, +0.000 ms)  -->  Incumbent Cost = 870
+  Update    2  (Sweep  1, +0.000 ms)  -->  Incumbent Cost = 860
+  Update   17  (Sweep  2, +0.001 ms)  -->  Incumbent Cost = 847
+  Update  160  (Sweep 10, +0.006 ms)  -->  Incumbent Cost = 846
+  Update  296  (Sweep 19, +0.011 ms)  -->  Incumbent Cost = 845
+  Update  694  (Sweep 44, +0.025 ms)  -->  Incumbent Cost = 843
+  Update 1154  (Sweep 73, +0.040 ms)  -->  Incumbent Cost = 842  (global optimum, of 1,000 sweeps)
 ```
 
 ---
@@ -173,19 +171,28 @@ On `XSH-n20-k4-21` ($Q = 275$, $\lvert\mathcal{F}_1\rvert = 458$ tight subsets, 
 ## 5. Reproducing the Results & Building the QOBLIB Submission
 
 ### Prerequisites
-
 - A C++17 compiler (`clang++` or `g++`) and `python3`.
+- A checkout of [ZIB-AOPT/QOBLIB](https://github.com/ZIB-AOPT/QOBLIB) next to this repository (default layout: `../QOBLIB`).
 
 ### Compile and Run
 
 ```bash
+git clone https://github.com/ZIB-AOPT/QOBLIB.git ../QOBLIB   # if not already present
+
 # 1. Compile and execute the C++17 solver (TC-Exact + SQA-Subspace across all 55 instances)
+#    args: [instances dir] [output JSON]  (defaults shown)
 clang++ -O3 -std=c++17 src/generate_submission_data.cpp -o build_campaign
-./build_campaign
+./build_campaign ../QOBLIB/09-routing/instances campaign_results.json
 
 # 2. Package the QOBLIB-compliant submission directory
-python3 scripts/build_submission.py
+python3 scripts/build_submission.py --results campaign_results.json \
+    --out ../QOBLIB/09-routing/submissions/20261017_TightSubspaceSQA_TCExact_Vuong
+
+# 3. Validate with the official QOBLIB checker
+(cd ../QOBLIB && python3 misc/ci/check_submission.py 09-routing/submissions/20261017_TightSubspaceSQA_TCExact_Vuong)
 ```
+
+All random seeds are fixed, so objective values, success counts and traces are reproduced exactly; only wall-clock timings vary with hardware.
 
 ---
 

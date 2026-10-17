@@ -134,8 +134,10 @@ struct TracePoint {
     int step;
 };
 
-int main() {
-    std::string inst_dir = "/Volumes/VKAS_SSD/11_QUANTUM_UPDATE/QOBLIB/09-routing/instances";
+int main(int argc, char** argv) {
+    // Usage: ./build_campaign [QOBLIB/09-routing/instances] [campaign_results.json]
+    std::string inst_dir = argc > 1 ? argv[1] : "../QOBLIB/09-routing/instances";
+    std::string out_json = argc > 2 ? argv[2] : "campaign_results.json";
     std::vector<std::string> files;
     for (const auto& entry : fs::directory_iterator(inst_dir)) {
         if (entry.path().extension() == ".vrp") {
@@ -144,7 +146,7 @@ int main() {
     }
     std::sort(files.begin(), files.end());
 
-    std::ofstream json_out("/Volumes/VKAS_SSD/11_QUANTUM_UPDATE/campaign_results.json");
+    std::ofstream json_out(out_json);
     json_out << "[\n";
 
     for (size_t f_idx = 0; f_idx < files.size(); ++f_idx) {

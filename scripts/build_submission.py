@@ -1,13 +1,29 @@
+import argparse
 import json
 import csv
 import gzip
 from pathlib import Path
 
-with open("/Volumes/VKAS_SSD/11_QUANTUM_UPDATE/campaign_results.json", encoding="utf-8") as f:
+parser = argparse.ArgumentParser(description="Package campaign_results.json into a QOBLIB 09-routing submission directory.")
+parser.add_argument("--results", default="campaign_results.json", help="JSON produced by build_campaign")
+parser.add_argument(
+    "--out",
+    default="../QOBLIB/09-routing/submissions/20261017_TightSubspaceSQA_TCExact_Vuong",
+    help="Target submission directory inside a QOBLIB checkout",
+)
+args = parser.parse_args()
+
+with open(args.results, encoding="utf-8") as f:
     data = json.load(f)
 
-sub_root = Path("/Volumes/VKAS_SSD/11_QUANTUM_UPDATE/QOBLIB/09-routing/submissions/20261017_TightSubspaceSQA_TCExact_Vuong")
+sub_root = Path(args.out)
 sub_root.mkdir(parents=True, exist_ok=True)
+
+# Remove legacy campaign_summary.csv inside sub_root if present so site_builder's
+# rglob("*_summary.csv") does not treat the overview table as a 30-col summary file.
+legacy_summary = sub_root / "campaign_summary.csv"
+if legacy_summary.exists():
+    legacy_summary.unlink()
 
 HEADERS = [
     "Problem", "Submitter", "Affiliation", "Date", "Reference",
@@ -20,11 +36,48 @@ HEADERS = [
     "CPU Runtime", "GPU Runtime", "QPU Runtime", "Other HW Runtime", "Remarks"
 ]
 
+INSERT_AFTER = {
+    "Date",
+    "Optimality Bound",
+    "Coefficients Range",
+    "Success Threshold",
+    "Hardware Specifications",
+    "Other HW Runtime",
+}
+
 HW_SPEC = "Apple M4 (10 cores); 16 GB unified RAM; macOS; AppleClang 21.0.0 (-O3 -std=c++17), single-thread execution"
+REF_URL = "Code: https://github.com/vkas0812-sys/qoblib-routing-exact-sqa"
+
+
+def write_instance_readme(instance: str, inst_dir: Path, rows: list[dict[str, str]]) -> None:
+    header_cells = ["Field"] + [f"Value {i}" for i in range(1, len(rows) + 1)]
+    header = "| " + " | ".join(header_cells) + " |\n"
+    sep = "| " + " | ".join("---" for _ in header_cells) + " |\n"
+    body_lines = []
+    for col in HEADERS:
+        cells = [col]
+        for row in rows:
+            val = str(row.get(col, "") or "")
+            val = val.replace("\n", "<br>").replace("|", r"\|")
+            cells.append(val)
+        body_lines.append("| " + " | ".join(cells) + " |")
+        if col in INSERT_AFTER:
+            empty_cells = ["======"] + [""] * len(rows)
+            body_lines.append("| " + " | ".join(empty_cells) + " |")
+    md = (
+        f"# Submission for {instance}\n\n"
+        f"This directory contains the submission for the problem **{instance}**.\n\n"
+        + header + sep + "\n".join(body_lines) + "\n"
+    )
+    (inst_dir / "README.md").write_text(md, encoding="utf-8")
+
 
 campaign_rows = []
 sqa_opt_count = 0
 tc_opt_count = 0
+total_sqa_succ_runs = 0
+total_tc_s = 0.0
+total_sqa_s = 0.0
 
 for item in data:
     inst = item["instance"]
@@ -39,6 +92,10 @@ for item in data:
     nz = item["nonzeros"]
     cap = item["capacity"]
     c_range = f"{item['min_coeff']} - {item['max_coeff']}"
+
+    total_tc_s += item["exact_total_s"]
+    total_sqa_s += item["sqa_mean_total_s"]
+    total_sqa_succ_runs += item["sqa_succ_runs"]
 
     # 1. Write <inst>_solution.sol
     sol_path = inst_dir / f"{inst}_solution.sol"
@@ -62,7 +119,7 @@ for item in data:
         "Submitter": "Vuong Kha Anh Son",
         "Affiliation": "Independent Researcher",
         "Date": "2026-10-17",
-        "Reference": "Code: https://github.com/vkas0812-sys/qoblib-routing-exact-sqa @ v1.0 (a7f7ed4)",
+        "Reference": REF_URL,
         "Best Objective Value": str(opt_val),
         "Optimality Bound": str(opt_val),
         "Modeling Approach": "Tight-Capacity Set Partitioning (Exact Cover over demand-tight subsets sum(d_i) = Q with Held-Karp TSP costs)",
@@ -105,7 +162,7 @@ for item in data:
         "Submitter": "Vuong Kha Anh Son",
         "Affiliation": "Independent Researcher",
         "Date": "2026-10-17",
-        "Reference": "Code: https://github.com/vkas0812-sys/qoblib-routing-exact-sqa @ v1.0 (a7f7ed4)",
+        "Reference": REF_URL,
         "Best Objective Value": str(sqa_val),
         "Optimality Bound": "N/A",
         "Modeling Approach": "Tight-Capacity Subspace QUBO / Hypergraph Simulated Quantum Annealing (P=16 Trotter replicas)",
@@ -119,7 +176,7 @@ for item in data:
         "Workflow": (
             "Pre-processing: project CVRP onto the demand-tight subspace (sum_{i in S} d_i = Q) and build the multi-scale 2-route and 3-route "
             "hypergraph transition neighborhoods. Main optimization: Simulated Quantum Annealing (Path-Integral Monte Carlo) with P=16 Trotter replicas, "
-            "transverse field schedule Gamma(t) from 35.0 to 0.175 over 1000 sweeps, ferromagnetic Trotter coupling J_perp(t) = -0.5*T*ln(tanh(Gamma/(P*T))), "
+            "transverse field schedule Gamma(t) from 35.0 to 0.175 over 1000 sweeps at effective temperature T = 6.0, ferromagnetic Trotter coupling J_perp(t) = -0.5*T*ln(tanh(Gamma/(P*T))), "
             "and multi-scale 2-route, 3-route, and 4-route quantum tunneling moves. Post-processing: select lowest-energy Trotter replica."
         ),
         "Algorithm Type": "Stochastic",
@@ -149,6 +206,8 @@ for item in data:
         writer.writerow(row_tc)
         writer.writerow(row_sqa)
 
+    write_instance_readme(inst, inst_dir, [row_tc, row_sqa])
+
     campaign_rows.append({
         "Instance": inst,
         "Capacity": cap,
@@ -164,46 +223,42 @@ for item in data:
         "SQA_MeanTtsMs": f"{item['sqa_mean_tts_s']*1000.0:.3f}"
     })
 
-with open(sub_root / "campaign_summary.csv", "w", newline="", encoding="utf-8") as cf:
+with open(sub_root / "campaign_results.csv", "w", newline="", encoding="utf-8") as cf:
     writer = csv.DictWriter(cf, fieldnames=list(campaign_rows[0].keys()))
     writer.writeheader()
     writer.writerows(campaign_rows)
 
-min_sub = min(d["num_subsets"] for d in data)
-max_sub = max(d["num_subsets"] for d in data)
-min_part = min(d["num_partitions"] for d in data)
-max_part = max(d["num_partitions"] for d in data)
-total_tc_s = sum(d["exact_total_s"] for d in data)
-mean_tc_ms = (total_tc_s / len(data)) * 1000.0
-total_sqa_s = sum(d["sqa_mean_total_s"] for d in data)
-mean_sqa_ms = (total_sqa_s / len(data)) * 1000.0
+n_inst = len(data)
+mean_tc_ms = (total_tc_s * 1000.0) / n_inst
+mean_sqa_ms = (total_sqa_s * 1000.0) / n_inst
 
 readme_text = f"""# Tight-Capacity Bitwise Set-Partitioning (`TC-Exact`) & Subspace Simulated Quantum Annealing (`SQA-Subspace`)
 
-**Submitter:** Vuong Kha Anh Son · **Date:** 2026-10-17
+**Submitter:** Vuong Kha Anh Son · **Date:** 2026-10-17 · **Code:** [`vkas0812-sys/qoblib-routing-exact-sqa`](https://github.com/vkas0812-sys/qoblib-routing-exact-sqa)
 
-All 55 `XSH-n20-k4` instances in `09-routing` solved to **100% proven optimality (`55/55`)** using two complementary algorithms that exploit the exact 100% tight-capacity structure ($\\sum_{{i=1}}^{{20}} d_i = 4 Q$):
+All 55 `XSH-n20-k4` instances in `09-routing` solved to **100% proven optimality (`55/55`)** using two complementary algorithms that exploit the exact 100% tight-capacity structure ($\\sum_{{i=1}}^{{20}} d_i = 4 Q$, with $Q \\in [180, 299]$):
 
 1. **`TC-Exact` (Tight-Capacity Bitwise Set-Partitioning + Held-Karp DP):**
-   - Enumerates all single-vehicle subsets $S \\subseteq \\{{1,\\dots,20\\}}$ satisfying $\\sum_{{i \\in S}} d_i = Q$ (between {min_sub} and {max_sub} subsets per instance) and computes their exact optimal TSP tour cost via bitwise Held-Karp dynamic programming.
-   - Solves the 4-vehicle exact cover problem $S_1 \\sqcup S_2 \\sqcup S_3 \\sqcup S_4 = \\{{1,\\dots,20\\}}$ deterministically using lowest-set-bit (`__builtin_ctz`) symmetry breaking and $O(1)$ complement bitmask lookup across all valid 4-way partitions (between {min_part} and {max_part:,} partitions per instance).
-   - Certifies global optimality across all 55 instances (including certifying `Cost = 842` as globally optimal on `XSH-n20-k4-21`) in **{total_tc_s*1000.0:.1f} ms total campaign runtime** (**{mean_tc_ms:.2f} ms** mean per instance).
+   - Enumerates all single-vehicle subsets $S \\subseteq \\{{1,\\dots,20\\}}$ satisfying $\\sum_{{i \\in S}} d_i = Q$ (between $300$ and $961$ subsets per instance) and computes their exact optimal TSP tour cost via bitwise Held-Karp dynamic programming.
+   - Solves the 4-vehicle exact cover problem $S_1 \\sqcup S_2 \\sqcup S_3 \\sqcup S_4 = \\{{1,\\dots,20\\}}$ (between $372$ and $5,630$ valid 4-way partitions per instance) deterministically using lowest-set-bit (`__builtin_ctz`) symmetry breaking and $O(1)$ complement bitmask lookup.
+   - Certifies global optimality across all 55 instances (including certifying `Cost = 842` as globally optimal on `XSH-n20-k4-21`, where the second-best partition has `Cost = 843`) in **{total_tc_s*1000.0:.2f} ms total campaign runtime** (**{mean_tc_ms:.2f} ms** per instance).
 2. **`SQA-Subspace` (Subspace-Guided Simulated Quantum Annealing via Path-Integral Monte Carlo):**
-   - Projects the CVRP onto the feasible tight-capacity partition manifold and evolves $P = 16$ Trotter replicas coupled along the imaginary-time dimension via $J_\\perp(t) = -\\frac{{1}}{{2}} T \\ln \\tanh(\\Gamma(t) / (P T))$.
-   - Uses multi-scale 2-route, 3-route, and 4-route quantum tunneling transitions to escape deep local minima (such as the `Cost = 843` trap on `XSH-n20-k4-21`).
-   - Reaches the global optimum on **{sqa_opt_count} / 55 instances** across 5 runs of 1000 sweeps per instance (**{mean_sqa_ms:.1f} ms** mean runtime per run).
+   - Projects the CVRP onto the feasible tight-capacity partition manifold and evolves $P = 16$ Trotter replicas coupled along the imaginary-time dimension via $J_\\perp(t) = -\\frac{{1}}{{2}} T \\ln \\tanh(\\Gamma(t) / (P T))$ at $T = 6.0$.
+   - Uses multi-scale 2-route, 3-route, and 4-route quantum tunneling transitions to escape local minima (such as the `Cost = 843` second-best trap on `XSH-n20-k4-21`).
+   - Reaches the global optimum on **{sqa_opt_count} / {n_inst} instances** across 5 runs of 1000 sweeps per instance (**{total_sqa_succ_runs} / {n_inst*5} ({100.0*total_sqa_succ_runs/(n_inst*5):.1f}%)** individual runs reaching the global optimum, **{mean_sqa_ms:.2f} ms** mean runtime per run).
 
 ## Summary Results (55 instances)
 
 | Metric | `TC-Exact` (Deterministic) | `SQA-Subspace` (5 runs, P=16 Trotter) |
 | :--- | :---: | :---: |
 | Instances solved to feasibility | **55 / 55 (100%)** | **55 / 55 (100%)** |
-| Instances solved to proven optimum | **55 / 55 (100%)** | **{sqa_opt_count} / 55 ({100.0*sqa_opt_count/55:.1f}%)** |
+| Instances reaching global optimum | **55 / 55 (100%, proven)** | **{sqa_opt_count} / 55 ({100.0*sqa_opt_count/n_inst:.1f}%)** |
+| Individual runs reaching global optimum | **55 / 55 (100.0%)** | **{total_sqa_succ_runs} / {n_inst*5} ({100.0*total_sqa_succ_runs/(n_inst*5):.1f}%)** |
 | Mean gap to optimum | **0.00 %** | **0.00 %** |
-| Mean per-instance runtime | **{mean_tc_ms:.2f} ms** | **{mean_sqa_ms:.1f} ms** |
-| Full 55-instance campaign runtime | **{total_tc_s:.2f} s** | **{total_sqa_s:.2f} s (per run)** |
+| Mean per-instance runtime | **{mean_tc_ms:.2f} ms** | **{mean_sqa_ms:.2f} ms** |
+| Full 55-instance campaign runtime | **{total_tc_s:.3f} s** | **{total_sqa_s:.3f} s (per run)** |
 
-Per-instance figures are in [`campaign_summary.csv`](campaign_summary.csv).
+Per-instance figures are in [`campaign_results.csv`](campaign_results.csv).
 
 ## Hardware Specifications
 
@@ -215,4 +270,4 @@ Apple M4 (10 cores), 16 GB unified RAM, macOS, compiled with `AppleClang 21.0.0`
 """
 
 (sub_root / "README.md").write_text(readme_text, encoding="utf-8")
-print(f"Generated 55 instance directories. TC-Exact Optimal: {tc_opt_count}/55, SQA-Subspace Optimal: {sqa_opt_count}/55")
+print(f"Generated {n_inst} instance directories. TC-Exact Optimal: {tc_opt_count}/{n_inst} ({mean_tc_ms:.2f} ms/inst), SQA-Subspace Optimal: {sqa_opt_count}/{n_inst} ({mean_sqa_ms:.2f} ms/inst)")

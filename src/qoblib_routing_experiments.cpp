@@ -530,9 +530,10 @@ TightSolverResult run_tight_subspace_and_sqa(const Instance& inst, int seed = 42
     return res;
 }
 
-int main() {
-    std::string inst_dir = "/Volumes/VKAS_SSD/11_QUANTUM_UPDATE/QOBLIB/09-routing/instances";
-    std::string sol_dir  = "/Volumes/VKAS_SSD/11_QUANTUM_UPDATE/QOBLIB/09-routing/solutions";
+int main(int argc, char** argv) {
+    // Usage: ./experiments [QOBLIB/09-routing/instances] [QOBLIB/09-routing/solutions]
+    std::string inst_dir = argc > 1 ? argv[1] : "../QOBLIB/09-routing/instances";
+    std::string sol_dir  = argc > 2 ? argv[2] : "../QOBLIB/09-routing/solutions";
 
     std::vector<std::string> files;
     for (const auto& entry : fs::directory_iterator(inst_dir)) {
