@@ -2,7 +2,6 @@
 
 **Author:** Vuong Kha Anh Son (`vkas0812-sys`)  
 **Affiliation:** Independent Researcher  
-**Paper Manuscript (PDF):** [`paper/main.pdf`](paper/main.pdf) · **LaTeX Source:** [`paper/main.tex`](paper/main.tex)  
 **Benchmark Target:** [ZIB-AOPT/QOBLIB — Class `09-routing` (Capacitated Vehicle Routing Problem)](https://github.com/ZIB-AOPT/QOBLIB/tree/main/09-routing)
 
 ---

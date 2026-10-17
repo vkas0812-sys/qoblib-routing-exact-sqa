@@ -16,7 +16,7 @@ SWEEPS = 1000   # sweeps per SQA run
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--results", default="campaign_results.json")
-parser.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "paper" / "figures" / "fig1_sqa_analysis.pdf"))
+parser.add_argument("--out", default="fig1_sqa_analysis.pdf")
 args = parser.parse_args()
 
 with open(args.results, encoding="utf-8") as f:
