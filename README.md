@@ -56,7 +56,9 @@ This creates isolated energy wells separated by massive penalty barriers, causin
 
 1. **Tight-Subset Bitmask Enumeration:** Enumerates the exact-capacity single-vehicle subset manifold:
 
-$$\mathcal{F}_1 = \left\{ m \in \{0, \dots, 2^{20}-1\} \;\middle\vert\; \sum_{i : \text{bit}_i(m)=1} d_i = Q \right\}, \quad \lvert\mathcal{F}_1\rvert \in [300, 961].$$
+$$
+\mathcal{F}_1 = \left\lbrace m \in \lbrace 0, \dots, 2^{20}-1 \rbrace \;\middle\vert\; \sum_{i : \text{bit}_i(m)=1} d_i = Q \right\rbrace, \quad \lvert\mathcal{F}_1\rvert \in [300, 961].
+$$
 
 2. **Held-Karp TSP Evaluation:** For each mask $m \in \mathcal{F}_1$, computes the exact minimum TSP tour cost $c^*(m)$ via bitwise Held-Karp dynamic programming in $\mathcal{O}\left(\lvert m \rvert^2 2^{\lvert m \rvert}\right)$ operations.
 
