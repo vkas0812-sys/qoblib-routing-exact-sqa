@@ -1,4 +1,4 @@
-# Closing the QOBLIB `09-routing` (CVRP) Benchmark: Exact Optimality Certificates (`TC-Exact`) & Subspace Simulated Quantum Annealing (`SQA-Subspace`)
+# QOBLIB `09-routing` (CVRP) Benchmark: Exact Optimality Certificates (`TC-Exact`) & Subspace Simulated Quantum Annealing (`SQA-Subspace`)
 
 **Author:** Vuong Kha Anh Son (`vkas0812-sys`)  
 **Affiliation:** Independent Researcher  
