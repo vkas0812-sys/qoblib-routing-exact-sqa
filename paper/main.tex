@@ -1,66 +1,73 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[10pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{amsmath,amssymb,amsfonts,amsthm}
 \usepackage{booktabs}
+\usepackage{graphicx}
 \usepackage{geometry}
 \usepackage{hyperref}
-\usepackage{algorithm}
-\usepackage{algpseudocode}
-\geometry{margin=1in}
+\usepackage{microtype}
+\geometry{margin=0.85in}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
 
 \newtheorem{proposition}{Proposition}
-\newtheorem{theorem}{Theorem}
 
-\title{\textbf{Closing the QOBLIB CVRP Benchmark: Exact Optimality Certificates and Subspace Simulated Quantum Annealing for Tight-Capacity Routing}}
+\title{\Large\textbf{Closing the QOBLIB CVRP Benchmark: Exact Optimality Certificates and Subspace Simulated Quantum Annealing for Tight-Capacity Routing}}
 
 \author{
   \textbf{Vuong Kha Anh Son} \\
   Independent Researcher \\
-  \texttt{QOBLIB 09-Routing Benchmark Contribution}
+  \small\texttt{anhson.vuongkha@gmail.com} $\cdot$ \href{https://github.com/vkas0812-sys/qoblib-routing-exact-sqa}{\texttt{github.com/vkas0812-sys/qoblib-routing-exact-sqa}}
 }
-\date{October 2026}
+\date{October 17, 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-The Capacitated Vehicle Routing Problem (CVRP) benchmark class (\texttt{09-routing}) in the Quantum Optimization Benchmark Library (QOBLIB) consists of 55 instances (\texttt{XSH-n20-k4-01} to \texttt{XSH-n20-k4-55}) with $n=20$ customers and $K=4$ vehicles. Despite their small customer count, standard Mixed-Integer Programming (MIP) and Quadratic Unconstrained Binary Optimization (QUBO) formulations struggle to close the optimality gap within a 1-hour limit for 54 out of 55 instances due to weak linear relaxations and severe quadratic penalty barriers. In this technical note, we show that every instance in \texttt{09-routing} possesses an exact \emph{zero-slack tight-capacity invariant}: $\sum_{i=1}^{20} d_i = 4Q$. Consequently, the feasible solution manifold collapses from $O(K^n)$ assignments to between $300$ and $961$ single-vehicle subsets and between $372$ and $5,630$ valid 4-vehicle partitions per instance. Exploiting this invariant, we introduce: (1) \textbf{TC-Exact}, a deterministic bitwise exact-cover and Held-Karp dynamic programming solver that certifies global optimality (\texttt{proven\_optimal = TRUE}) across all \textbf{55/55 instances} in an average of \textbf{3.83 ms} per instance (including certifying $\text{Cost}=842$ on the hardest instance \texttt{XSH-n20-k4-21}, where the second-best partition has $\text{Cost}=843$); and (2) \textbf{SQA-Subspace}, a Path-Integral Simulated Quantum Annealing algorithm evolving $P=16$ Trotter replicas directly on the demand-tight partition manifold via multi-route recombination tunneling, achieving \textbf{55/55 (100\%) global optimality} in \textbf{22.4 ms} per run compared to \textbf{0/55} for penalty-based QUBO/Ising SQA.
+\noindent
+The Capacitated Vehicle Routing Problem (CVRP) benchmark class (\texttt{09-routing}) in the Quantum Optimization Benchmark Library (QOBLIB) consists of 55 instances (\texttt{XSH-n20-k4-01} to \texttt{XSH-n20-k4-55}) with $n=20$ customers and $K=4$ identical vehicles. Despite their small customer count, standard Mixed-Integer Programming (MIP) and Quadratic Unconstrained Binary Optimization (QUBO) formulations struggle to close the optimality gap within a 1-hour limit for 54 out of 55 instances due to weak linear relaxations and severe quadratic penalty barriers. In this technical note, we prove that every instance in \texttt{09-routing} satisfies an exact \emph{zero-slack tight-capacity invariant}: $\sum_{i=1}^{20} d_i = 4Q$. Consequently, the feasible solution manifold collapses from $O(K^n)$ assignments to between $300$ and $961$ single-vehicle subsets and between $372$ and $5,630$ valid 4-vehicle partitions per instance. Exploiting this invariant, we introduce: (1) \textbf{\texttt{TC-Exact}}, a deterministic bitwise exact-cover and Held-Karp dynamic programming solver that certifies global optimality (\texttt{proven\_optimal = TRUE}) across all \textbf{55/55 instances} in a mean runtime of \textbf{3.33 ms} per instance (including certifying $\text{Cost}=842$ on the hardest instance \texttt{XSH-n20-k4-21}, where the second-best partition has $\text{Cost}=843$); and (2) \textbf{\texttt{SQA-Subspace}}, a Path-Integral Simulated Quantum Annealing algorithm evolving $P=16$ Trotter replicas directly on the demand-tight partition manifold via multi-route recombination tunneling, achieving \textbf{55/55 (100\%) global optimality} in \textbf{13.2 ms} mean runtime per run (mean time-to-solution \textbf{12.77 ms}) compared to \textbf{0/55} for penalty-based QUBO/Ising SQA.
 \end{abstract}
 
 \section{Introduction and the Penalty Barrier in QOBLIB \texttt{09-routing}}
 
-The Quantum Optimization Benchmark Library (QOBLIB)~\cite{koch2025qoblib} establishes standardized, verifiable benchmark challenges across ten combinatorial optimization classes to evaluate classical, quantum-inspired, and quantum hardware solvers. Class \texttt{09-routing} focuses on the Capacitated Vehicle Routing Problem (CVRP) with 55 instances (\texttt{XSH-n20-k4-01} through \texttt{XSH-n20-k4-55}), each comprising $n=20$ customers, a central depot (node $0$), $K=4$ identical vehicles of capacity $Q \in \{35, 1000\}$, and rounded 2D Euclidean distances (\texttt{EUC\_2D}):
+The Quantum Optimization Benchmark Library (QOBLIB)~\cite{koch2025qoblib} establishes standardized benchmark challenges across ten combinatorial optimization classes to evaluate classical, quantum-inspired, and quantum hardware solvers. Class \texttt{09-routing} focuses on the Capacitated Vehicle Routing Problem (CVRP) with 55 instances (\texttt{XSH-n20-k4-01} through \texttt{XSH-n20-k4-55}), each comprising $n=20$ customers, a central depot (node $0$), $K=4$ identical vehicles of capacity $Q \in [180, 299]$, and rounded 2D Euclidean distances (\texttt{EUC\_2D}):
 \begin{equation}
-  c_{uv} = \lfloor \sqrt{(x_u - x_v)^2 + (y_u - y_v)^2} + 0.5 \rfloor, \quad \forall u, v \in \{0, 1, \dots, n\}.
+  c_{uv} = \left\lfloor \sqrt{(x_u - x_v)^2 + (y_u - y_v)^2} + 0.5 \right\rfloor, \quad \forall u, v \in \{0, 1, \dots, n\}.
 \end{equation}
 
-In standard QUBO/Ising formulations of CVRP, binary variables $x_{i,r,t} \in \{0,1\}$ encode whether customer $i$ is visited at position $t$ by vehicle $r$, and inequality constraints $\sum_{i=1}^n d_i y_{i,r} \le Q$ are enforced via slack variables and a quadratic penalty term:
+In standard QUBO/Ising formulations of CVRP, binary variables encode customer-vehicle-position assignments, and inequality constraints $\sum_{i=1}^n d_i y_{i,r} \le Q$ are enforced via slack variables $s_r$ and a quadratic penalty term:
 \begin{equation}
   \mathcal{H}_{\text{penalty}} = \lambda_{\text{cap}} \sum_{r=1}^{K} \left( \sum_{i=1}^{n} d_i y_{i,r} + s_r - Q \right)^2 + \lambda_{\text{visit}} \sum_{i=1}^{n} \left( \sum_{r=1}^{K} y_{i,r} - 1 \right)^2.
   \label{eq:qubo_penalty}
 \end{equation}
-This representation requires $\sim 1,600$ to $2,500$ logical binary variables for $n=20, K=4$. More critically, as we demonstrate below, the demand structure of \texttt{XSH-n20-k4} induces infinite-like energy barriers under single-spin and two-spin transitions.
+This representation requires $\sim 1,600$ to $2,500$ logical binary variables for $n=20, K=4$. More critically, as proven below, the demand structure of \texttt{XSH-n20-k4} induces severe energy barriers under standard 1-flip and 2-swap transitions.
 
 \section{The Zero-Slack Tight-Capacity Structural Invariant}
 
 \begin{proposition}[Zero-Slack Capacity Invariant]
 Every instance in QOBLIB \texttt{09-routing} (\texttt{XSH-n20-k4-01} to \texttt{XSH-n20-k4-55}) satisfies the exact demand balance identity:
 \begin{equation}
-  \sum_{i=1}^{20} d_i = 4 Q \quad (\text{Total Fleet Slack } \Delta = 4Q - \sum_{i=1}^{20} d_i = 0).
+  \sum_{i=1}^{20} d_i = 4 Q \quad \left(\text{Total Fleet Slack } \Delta = 4Q - \sum_{i=1}^{20} d_i = 0\right).
   \label{eq:zero_slack}
 \end{equation}
 Consequently, every vehicle route $S_r \subseteq \{1,\dots,20\}$ in any feasible solution must satisfy the exact equality constraint $\sum_{i \in S_r} d_i = Q$.
 \end{proposition}
 
 \begin{proof}
-Suppose a feasible partition $\{S_1, S_2, S_3, S_4\}$ satisfies $\sum_{i \in S_r} d_i \le Q$ for each $r \in \{1,2,3,4\}$. Summing over all $K=4$ disjoint routes covering $\{1,\dots,20\}$ yields $\sum_{r=1}^4 \sum_{i \in S_r} d_i = \sum_{i=1}^{20} d_i = 4Q$. Since each term in the sum of 4 routes is bounded above by $Q$, equality $\sum_{i \in S_r} d_i = Q$ must hold for every $r \in \{1,2,3,4\}$. Direct inspection of all 55 \texttt{.vrp} files confirms Eq.~\eqref{eq:zero_slack} holds universally.
+Suppose a feasible partition $\{S_1, S_2, S_3, S_4\}$ satisfies $\sum_{i \in S_r} d_i \le Q$ for each $r \in \{1,2,3,4\}$. Summing over all $K=4$ disjoint routes covering $\{1,\dots,20\}$ yields $\sum_{r=1}^4 \sum_{i \in S_r} d_i = \sum_{i=1}^{20} d_i = 4Q$. Since each term in the sum of 4 routes is bounded above by $Q$, equality $\sum_{i \in S_r} d_i = Q$ must hold for every $r \in \{1,2,3,4\}$. Direct verification across all 55 \texttt{.vrp} files confirms Eq.~\eqref{eq:zero_slack} holds universally.
 \end{proof}
 
-Proposition~1 immediately explains why unconstrained penalty-based QUBO/Ising solvers (\texttt{SQA-Direct}) fail:
+Proposition~1 directly explains why unconstrained penalty-based QUBO/Ising solvers (\texttt{SQA-Direct}) freeze:
 \begin{enumerate}
-  \item \textbf{Absence of Single-Customer Moves:} Moving any customer $i$ with $d_i > 0$ from route $r_1$ to $r_2$ violates capacity on $r_2$ ($\sum_{j \in S_{r_2}} d_j + d_i = Q + d_i > Q$).
-  \item \textbf{Rarity of Equal-Demand 2-Swaps:} Swapping $i \in S_{r_1}$ and $j \in S_{r_2}$ preserves feasibility if and only if $d_i = d_j$. For random demands in $[1, 400]$ with $Q=1000$, almost all customer pairs have $d_i \neq d_j$, creating a penalty barrier $\Delta E_{\text{pen}} = 2 \lambda_{\text{cap}} (d_i - d_j)^2 \gg \Delta E_{\text{route}}$.
+  \item \textbf{Absence of Single-Customer Moves:} Moving any customer $i$ ($d_i > 0$) from route $r_1$ to $r_2$ violates capacity on $r_2$ ($\sum_{j \in S_{r_2}} d_j + d_i = Q + d_i > Q$).
+  \item \textbf{Rarity of Equal-Demand 2-Swaps:} Swapping $i \in S_{r_1}$ and $j \in S_{r_2}$ preserves feasibility if and only if $d_i = d_j$. For heterogeneous customer demands, almost all pairs have $d_i \neq d_j$, creating a penalty barrier $\Delta E_{\text{pen}} = 2 \lambda_{\text{cap}} (d_i - d_j)^2 \gg \Delta E_{\text{route}}$.
 \end{enumerate}
 
 \section{Methodology}
@@ -69,18 +76,18 @@ Proposition~1 immediately explains why unconstrained penalty-based QUBO/Ising so
 
 Instead of branching on arc variables, \texttt{TC-Exact} projects the problem onto the exact demand-tight subset manifold:
 \begin{equation}
-  \mathcal{F}_1 = \left\{ S \subseteq \{1,\dots,20\} \;\middle|\; \sum_{i \in S} d_i = Q \right\}.
+  \mathcal{F}_1 = \left\{ m \in \{0,\dots,2^{20}-1\} \;\middle|\; \sum_{i : \text{bit}_i(m)=1} d_i = Q \right\}.
 \end{equation}
-Representing each subset $S$ as a 20-bit integer mask $m \in [0, 2^{20}-1]$, depth-first subset-sum filtering identifies $|\mathcal{F}_1| \in [300, 961]$ valid single-vehicle masks per instance in $<0.2\text{ ms}$. For each $m \in \mathcal{F}_1$, we compute the exact optimal Traveling Salesperson Problem (TSP) tour cost $c^*(m)$ starting and ending at depot $0$ via Held-Karp dynamic programming:
+Representing each subset as a 20-bit integer mask $m$, depth-first subset-sum filtering identifies $|\mathcal{F}_1| \in [300, 961]$ valid single-vehicle masks per instance in $<0.2\text{ ms}$. For each $m \in \mathcal{F}_1$, we compute the exact optimal Traveling Salesperson Problem (TSP) tour cost $c^*(m)$ starting and ending at depot $0$ via Held-Karp dynamic programming:
 \begin{equation}
   DP[A][u] = \min_{v \in A \setminus \{u\}} \left\{ DP[A \setminus \{u\}][v] + c_{vu} \right\}, \quad c^*(m) = \min_{u \in m} \left\{ DP[m][u] + c_{u0} \right\}.
 \end{equation}
 
-Finally, the 4-vehicle CVRP reduces to the Exact Cover problem over $\mathcal{F}_1$:
+The 4-vehicle CVRP then reduces to the Exact Cover problem over $\mathcal{F}_1$:
 \begin{equation}
   \min_{m_1, m_2, m_3, m_4 \in \mathcal{F}_1} \sum_{r=1}^{4} c^*(m_r) \quad \text{s.t.} \quad m_a \wedge m_b = 0 \; (\forall a \neq b), \quad \bigvee_{r=1}^{4} m_r = 2^{20}-1.
 \end{equation}
-To eliminate the $4! = 24$ vehicle permutation symmetry, we anchor the lowest set bit ($\text{\texttt{\_\_builtin\_ctz}}$) of the remaining unvisited customer mask at each stage $r \in \{1,2,3\}$, and determine $m_4 = (2^{20}-1) \oplus (m_1 \vee m_2 \vee m_3)$ in $O(1)$ time via a direct lookup table $\text{cost}[m_4]$. Across all 55 instances, the total number of valid 4-way partitions $|\mathcal{P}_4|$ ranges between $372$ (\texttt{XSH-n20-k4-34}) and $5,630$ (\texttt{XSH-n20-k4-24}), enabling exhaustive global optimality certification in $\sim 3.8\text{ ms}$ per instance.
+To eliminate the $4! = 24$ vehicle permutation symmetry, we anchor the lowest set bit (\texttt{ctz}) of the remaining unvisited customer mask at each stage $r \in \{1,2,3\}$, and determine $m_4 = (2^{20}-1) \oplus (m_1 \vee m_2 \vee m_3)$ in $O(1)$ time via a direct lookup table $\text{cost}[m_4]$. Across all 55 instances, the total number of valid 4-way partitions $|\mathcal{P}_4|$ ranges between $372$ (\texttt{XSH-n20-k4-34}) and $5,630$ (\texttt{XSH-n20-k4-24}), enabling exhaustive global optimality certification in $3.33\text{ ms}$ mean time per instance ($0.18\text{ s}$ total across all 55 instances).
 
 \subsection{Algorithm 2: Subspace Simulated Quantum Annealing (\texttt{SQA-Subspace})}
 
@@ -88,32 +95,81 @@ To evaluate quantum-inspired optimization without penalty barriers, we formulate
 \begin{equation}
   \mathcal{S}_{\text{eff}}\left(\{\mathcal{P}^{(p)}\}\right) = \sum_{p=0}^{P-1} \frac{1}{P} E_{\text{CVRP}}\left(\mathcal{P}^{(p)}\right) - J_{\perp}(t) \sum_{p=0}^{P-1} \mathcal{O}\left(\mathcal{P}^{(p)}, \mathcal{P}^{(p+1 \bmod P)}\right),
 \end{equation}
-where $J_{\perp}(t) = -\frac{1}{2} T \ln \tanh\left(\frac{\Gamma(t)}{P T}\right)$ is the ferromagnetic imaginary-time coupling driven by transverse field $\Gamma(t)$ annealed from $\Gamma_0 = 35.0$ to $\Gamma_f = 0.175$ at fixed temperature $T = 2.5$, and $\mathcal{O}(\mathcal{P}^{(p)}, \mathcal{P}^{(q)}) = \sum_{r=1}^4 \mathbb{I}[m_r^{(p)} \in \mathcal{P}^{(q)}] \in \{0,1,2,4\}$ measures replica configuration overlap.
+where $J_{\perp}(t) = -\frac{1}{2} T \ln \tanh\left(\frac{\Gamma(t)}{P T}\right)$ is the ferromagnetic imaginary-time coupling driven by transverse field $\Gamma(t)$ annealed from $\Gamma_0 = 35.0$ to $\Gamma_f = 0.175$ at fixed temperature $T = 2.5$, and $\mathcal{O}(\mathcal{P}^{(p)}, \mathcal{P}^{(q)}) = \sum_{r=1}^4 \mathbb{I}[m_r^{(p)} \in \mathcal{P}^{(q)}] \in \{0,1,2,4\}$ measures replica configuration overlap. Quantum tunneling transitions within each Trotter slice are generated by multi-scale demand-preserving $k$-route recombination ($k \in \{2,3,4\}$): selecting $k$ routes from $\mathcal{P}^{(p)}$ with union mask $U = \bigvee_{j=1}^k m_{r_j}$ ($\sum_{i \in U} d_i = kQ$) and transitioning to a distinct $k$-tuple of disjoint masks in $\mathcal{F}_1$ whose union equals $U$.
 
-Quantum tunneling transitions within each Trotter slice are generated by multi-scale demand-preserving $k$-route recombination ($k \in \{2,3,4\}$): selecting $k$ routes from $\mathcal{P}^{(p)}$ with union mask $U = \bigvee_{j=1}^k m_{r_j}$ ($\sum_{i \in U} d_i = kQ$) and transitioning to a distinct $k$-tuple of disjoint masks in $\mathcal{F}_1$ whose union equals $U$.
+\begin{figure}[t!]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig1_sqa_analysis.pdf}
+  \caption{(a) Quantum tunneling convergence trajectories of \texttt{SQA-Subspace} ($P=16$ Trotter slices, 5 independent runs of 1,000 sweeps) on the hardest instance \texttt{XSH-n20-k4-21}, escaping both the QOBLIB paper baseline ($853$) and the second-best partition trap ($843$) to reach the certified global optimum ($842$). (b) Cardinality of tight single-vehicle subsets $|\mathcal{F}_1|$ and valid 4-vehicle partitions $|\mathcal{P}_4|$ across all 55 instances.}
+  \label{fig:sqa_convergence}
+\end{figure}
 
 \section{Experimental Results across 55 QOBLIB Instances}
 
-All experiments were executed single-threaded on an Apple M4 processor (16 GB unified memory, \texttt{AppleClang 21.0.0 -O3}). Table~\ref{tab:comparison} summarizes the performance of penalty-based \texttt{SQA-Direct}, manifold-guided \texttt{SQA-Subspace} (5 runs of 1,000 sweeps per instance), \texttt{TC-Exact}, and prior QOBLIB references.
+All experiments were executed single-threaded on an Apple M4 processor (16 GB unified memory, \texttt{AppleClang 21.0.0 -O3}). Table~\ref{tab:comparison} summarizes overall performance, Figure~\ref{fig:sqa_convergence} illustrates the convergence dynamics and subspace cardinality, and Table~\ref{tab:all55} reports exact per-instance metrics across all 55 instances. On instance \texttt{XSH-n20-k4-21}, \texttt{TC-Exact} evaluates all $|\mathcal{F}_1| = 458$ tight subsets and $|\mathcal{P}_4| = 1,090$ valid partitions in $2.03\text{ ms}$, certifying $\text{Cost}^* = 842$ as the unique global optimum over the second-best partition $\text{Cost}^{(2)} = 843$.
 
 \begin{table}[h!]
 \centering
-\caption{Benchmark comparison across all 55 \texttt{XSH-n20-k4} instances in QOBLIB \texttt{09-routing}.}
+\caption{Aggregate benchmark comparison across all 55 \texttt{XSH-n20-k4} instances in QOBLIB \texttt{09-routing}.}
 \label{tab:comparison}
+\vspace{4pt}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 \textbf{Solver / Approach} & \textbf{Feasible} & \textbf{Optimal} & \textbf{Proven Optimal} & \textbf{Mean Runtime / Instance} \\
 \midrule
-\texttt{SQA-Direct} (Quadratic Penalty Ising, $P=16$) & 0 / 55 & 0 / 55 & No & 30.2 ms \\
-Memetic GA (\texttt{ElYaakoubi}, QOBLIB 2026) & 55 / 55 & 54 / 55 & No & 1,300 -- 48,490 ms \\
-\textbf{\texttt{SQA-Subspace} (Ours, $P=16$, 1000 sweeps)} & \textbf{55 / 55} & \textbf{55 / 55 (100\%)} & No (Stochastic) & \textbf{22.4 ms} \\
-\textbf{\texttt{TC-Exact} (Ours, Bitwise Set-Partitioning)} & \textbf{55 / 55} & \textbf{55 / 55 (100\%)} & \textbf{Yes (55/55)} & \textbf{3.83 ms} \\
+\texttt{SQA-Direct} (Quadratic Penalty Ising, $P=16$) & 0 / 55 & 0 / 55 (0.0\%) & No & 30.2 ms \\
+Memetic GA (\texttt{ElYaakoubi}, QOBLIB 2026) & 55 / 55 & 54 / 55 (98.2\%) & No & 1,300 -- 48,490 ms \\
+\textbf{\texttt{SQA-Subspace} (Ours, $P=16$, 1000 sweeps)} & \textbf{55 / 55} & \textbf{55 / 55 (100.0\%)} & No (Stochastic) & \textbf{13.2 ms (TTS: 12.77 ms)} \\
+\textbf{\texttt{TC-Exact} (Ours, Bitwise Set-Partitioning)} & \textbf{55 / 55} & \textbf{55 / 55 (100.0\%)} & \textbf{Yes (55/55)} & \textbf{3.33 ms} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
-\paragraph{Resolution of Instance \texttt{XSH-n20-k4-21}:}
-In the original QOBLIB benchmark paper~\cite{koch2025qoblib}, instance \texttt{XSH-n20-k4-21} had a best reported solution of $853$, while the prior Memetic GA submission achieved $863$, and the heuristic reference listed $842$ without optimality proof. Our \texttt{TC-Exact} solver exhaustively evaluates all $|\mathcal{F}_1| = 609$ tight subsets and all $|\mathcal{P}_4| = 1,701$ feasible 4-vehicle partitions in $2.69\text{ ms}$, certifying that $\text{Cost}^* = 842$ is the unique global optimum, with a second-best partition at $\text{Cost} = 843$ (spectral gap $\Delta E = 1$). Furthermore, \texttt{SQA-Subspace} successfully tunnels out of the $\text{Cost}=843$ local minimum to reach the $\text{Cost}=842$ ground state.
+\begin{table}[p!]
+\centering
+\caption{Complete results across all 55 QOBLIB \texttt{09-routing} instances (\texttt{XSH-n20-k4-01} to \texttt{55}). Columns show instance ID, vehicle capacity $Q$, tight single-vehicle subsets $|\mathcal{F}_1|$, valid 4-way partitions $|\mathcal{P}_4|$, proven optimal objective $C^*$, second-best partition cost $C^{(2)}$, \texttt{TC-Exact} runtime (ms), \texttt{SQA-Subspace} best cost across 5 runs, and \texttt{SQA-Subspace} mean runtime (ms).}
+\label{tab:all55}
+\vspace{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}crrrrrrrr@{\hspace{18pt}}crrrrrrrr@{}}
+\toprule
+\textbf{ID} & $Q$ & $|\mathcal{F}_1|$ & $|\mathcal{P}_4|$ & $C^*$ & $C^{(2)}$ & \textbf{TC (ms)} & \textbf{SQA} & \textbf{ms} &
+\textbf{ID} & $Q$ & $|\mathcal{F}_1|$ & $|\mathcal{P}_4|$ & $C^*$ & $C^{(2)}$ & \textbf{TC (ms)} & \textbf{SQA} & \textbf{ms} \\
+\midrule
+    \texttt{01} & 231 & 546 & 2520 & \textbf{646} & 648 & 3.28 & \textbf{646} & 13.5 & \texttt{29} & 229 & 555 & 2334 & \textbf{658} & 661 & 2.91 & \textbf{658} & 10.9 \\
+    \texttt{02} & 194 & 917 & 2612 & \textbf{650} & 652 & 14.64 & \textbf{650} & 25.1 & \texttt{30} & 262 & 413 & 2158 & \textbf{685} & 688 & 1.08 & \textbf{685} & 7.3 \\
+    \texttt{03} & 281 & 413 & 1067 & \textbf{508} & 510 & 1.87 & \textbf{508} & 4.1 & \texttt{31} & 259 & 492 & 3371 & \textbf{445} & 448 & 2.04 & \textbf{445} & 16.8 \\
+    \texttt{04} & 299 & 359 & 2034 & \textbf{776} & 782 & 0.87 & \textbf{776} & 6.4 & \texttt{32} & 197 & 828 & 3008 & \textbf{882} & 884 & 6.35 & \textbf{882} & 17.7 \\
+    \texttt{05} & 270 & 435 & 1730 & \textbf{702} & 706 & 1.77 & \textbf{702} & 6.2 & \texttt{33} & 250 & 491 & 2413 & \textbf{568} & 569 & 1.97 & \textbf{568} & 10.1 \\
+    \texttt{06} & 210 & 536 & 4012 & \textbf{690} & 697 & 1.69 & \textbf{690} & 19.4 & \texttt{34} & 270 & 478 & 372 & \textbf{891} & 893 & 1.81 & \textbf{891} & 2.4 \\
+    \texttt{07} & 221 & 546 & 1077 & \textbf{730} & 734 & 3.03 & \textbf{730} & 5.1 & \texttt{35} & 284 & 418 & 1776 & \textbf{707} & 713 & 1.46 & \textbf{707} & 5.9 \\
+    \texttt{08} & 180 & 961 & 2282 & \textbf{718} & 720 & 12.17 & \textbf{718} & 19.1 & \texttt{36} & 226 & 556 & 3722 & \textbf{610} & 614 & 2.46 & \textbf{610} & 19.5 \\
+    \texttt{09} & 180 & 938 & 2817 & \textbf{707} & 711 & 11.57 & \textbf{707} & 22.1 & \texttt{37} & 245 & 475 & 2800 & \textbf{650} & 655 & 1.53 & \textbf{650} & 11.3 \\
+    \texttt{10} & 239 & 541 & 2506 & \textbf{737} & 738 & 2.28 & \textbf{737} & 9.7 & \texttt{38} & 234 & 552 & 3513 & \textbf{991} & 993 & 2.94 & \textbf{991} & 18.5 \\
+    \texttt{11} & 251 & 459 & 1249 & \textbf{914} & 922 & 1.71 & \textbf{914} & 4.3 & \texttt{39} & 234 & 595 & 2885 & \textbf{717} & 718 & 3.45 & \textbf{717} & 14.6 \\
+    \texttt{12} & 249 & 507 & 2222 & \textbf{709} & 732 & 2.05 & \textbf{709} & 9.0 & \texttt{40} & 234 & 586 & 2624 & \textbf{700} & 732 & 3.06 & \textbf{700} & 19.4 \\
+    \texttt{13} & 194 & 827 & 5011 & \textbf{628} & 636 & 7.08 & \textbf{628} & 36.4 & \texttt{41} & 245 & 538 & 2069 & \textbf{736} & 739 & 3.20 & \textbf{736} & 9.1 \\
+    \texttt{14} & 267 & 455 & 1473 & \textbf{696} & 697 & 2.29 & \textbf{696} & 5.7 & \texttt{42} & 232 & 597 & 1978 & \textbf{998} & 1005 & 3.16 & \textbf{998} & 8.9 \\
+    \texttt{15} & 257 & 500 & 2895 & \textbf{780} & 782 & 2.56 & \textbf{780} & 12.2 & \texttt{43} & 240 & 625 & 2279 & \textbf{465} & 472 & 4.72 & \textbf{465} & 13.2 \\
+    \texttt{16} & 230 & 602 & 5187 & \textbf{830} & 831 & 2.76 & \textbf{830} & 32.9 & \texttt{44} & 235 & 544 & 2283 & \textbf{973} & 979 & 2.46 & \textbf{973} & 10.1 \\
+    \texttt{17} & 253 & 454 & 2311 & \textbf{605} & 612 & 1.45 & \textbf{605} & 8.9 & \texttt{45} & 279 & 355 & 3406 & \textbf{1071} & 1078 & 0.68 & \textbf{1071} & 14.5 \\
+    \texttt{18} & 257 & 530 & 2472 & \textbf{997} & 1003 & 2.86 & \textbf{997} & 10.3 & \texttt{46} & 210 & 824 & 4197 & \textbf{812} & 814 & 6.53 & \textbf{812} & 27.9 \\
+    \texttt{19} & 269 & 448 & 1675 & \textbf{976} & 987 & 1.48 & \textbf{976} & 5.5 & \texttt{47} & 266 & 471 & 1174 & \textbf{583} & 585 & 1.95 & \textbf{583} & 4.4 \\
+    \texttt{20} & 276 & 426 & 1668 & \textbf{648} & 650 & 1.45 & \textbf{648} & 5.6 & \texttt{48} & 220 & 676 & 2192 & \textbf{544} & 545 & 5.14 & \textbf{544} & 11.8 \\
+    \texttt{21} & 275 & 458 & 1090 & \textbf{842} & 843 & 2.03 & \textbf{842} & 4.1 & \texttt{49} & 233 & 524 & 2871 & \textbf{1045} & 1049 & 1.93 & \textbf{1045} & 12.2 \\
+    \texttt{22} & 253 & 506 & 1834 & \textbf{760} & 769 & 2.50 & \textbf{760} & 6.9 & \texttt{50} & 245 & 540 & 2105 & \textbf{627} & 629 & 2.59 & \textbf{627} & 8.2 \\
+    \texttt{23} & 258 & 474 & 3137 & \textbf{851} & 860 & 1.53 & \textbf{851} & 13.6 & \texttt{51} & 228 & 639 & 2940 & \textbf{491} & 494 & 5.83 & \textbf{491} & 15.4 \\
+    \texttt{24} & 205 & 769 & 5630 & \textbf{725} & 739 & 4.59 & \textbf{725} & 39.1 & \texttt{52} & 210 & 713 & 3112 & \textbf{622} & 625 & 5.70 & \textbf{622} & 18.5 \\
+    \texttt{25} & 240 & 551 & 2864 & \textbf{462} & 463 & 2.51 & \textbf{462} & 13.2 & \texttt{53} & 297 & 300 & 1554 & \textbf{967} & 972 & 0.53 & \textbf{967} & 3.8 \\
+    \texttt{26} & 299 & 359 & 1308 & \textbf{688} & 692 & 1.01 & \textbf{688} & 4.2 & \texttt{54} & 198 & 749 & 4850 & \textbf{791} & 797 & 5.39 & \textbf{791} & 41.8 \\
+    \texttt{27} & 244 & 536 & 2279 & \textbf{540} & 542 & 2.70 & \textbf{540} & 9.6 & \texttt{55} & 289 & 306 & 1386 & \textbf{617} & 618 & 0.79 & \textbf{617} & 3.8 \\
+    \texttt{28} & 211 & 716 & 2506 & \textbf{669} & 675 & 5.54 & \textbf{669} & 14.1 &  & & & & & & & &  \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
 
 \section{Implications for Quantum Hardware Implementations}
 
@@ -124,7 +180,7 @@ In accordance with the QOBLIB AI Policy, this work is declared as \texttt{genera
 
 \begin{thebibliography}{9}
 \bibitem{koch2025qoblib}
-T.~Koch, D.~E.~ireal, D.~Schicker, et al., ``Quantum Optimization Benchmark Library -- The Intractable Decathlon,'' \emph{arXiv preprint arXiv:2504.03832}, Zuse Institute Berlin (ZIB), 2025.
+T.~Koch, D.~Schicker, et al., ``Quantum Optimization Benchmark Library -- The Intractable Decathlon,'' \emph{arXiv preprint arXiv:2504.03832}, Zuse Institute Berlin (ZIB), 2025.
 \end{thebibliography}
 
 \end{document}
