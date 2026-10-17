@@ -62,7 +62,7 @@ for item in data:
         "Submitter": "Vuong Kha Anh Son",
         "Affiliation": "Independent Researcher",
         "Date": "2026-10-17",
-        "Reference": "Code: https://github.com/vkas0812-sys/qoblib-routing-exact-sqa",
+        "Reference": "Code: https://github.com/vkas0812-sys/qoblib-routing-exact-sqa @ v1.0 (a7f7ed4)",
         "Best Objective Value": str(opt_val),
         "Optimality Bound": str(opt_val),
         "Modeling Approach": "Tight-Capacity Set Partitioning (Exact Cover over demand-tight subsets sum(d_i) = Q with Held-Karp TSP costs)",
@@ -105,7 +105,7 @@ for item in data:
         "Submitter": "Vuong Kha Anh Son",
         "Affiliation": "Independent Researcher",
         "Date": "2026-10-17",
-        "Reference": "Code: https://github.com/vkas0812-sys/qoblib-routing-exact-sqa",
+        "Reference": "Code: https://github.com/vkas0812-sys/qoblib-routing-exact-sqa @ v1.0 (a7f7ed4)",
         "Best Objective Value": str(sqa_val),
         "Optimality Bound": "N/A",
         "Modeling Approach": "Tight-Capacity Subspace QUBO / Hypergraph Simulated Quantum Annealing (P=16 Trotter replicas)",
@@ -169,6 +169,15 @@ with open(sub_root / "campaign_summary.csv", "w", newline="", encoding="utf-8") 
     writer.writeheader()
     writer.writerows(campaign_rows)
 
+min_sub = min(d["num_subsets"] for d in data)
+max_sub = max(d["num_subsets"] for d in data)
+min_part = min(d["num_partitions"] for d in data)
+max_part = max(d["num_partitions"] for d in data)
+total_tc_s = sum(d["exact_total_s"] for d in data)
+mean_tc_ms = (total_tc_s / len(data)) * 1000.0
+total_sqa_s = sum(d["sqa_mean_total_s"] for d in data)
+mean_sqa_ms = (total_sqa_s / len(data)) * 1000.0
+
 readme_text = f"""# Tight-Capacity Bitwise Set-Partitioning (`TC-Exact`) & Subspace Simulated Quantum Annealing (`SQA-Subspace`)
 
 **Submitter:** Vuong Kha Anh Son · **Date:** 2026-10-17
@@ -176,13 +185,13 @@ readme_text = f"""# Tight-Capacity Bitwise Set-Partitioning (`TC-Exact`) & Subsp
 All 55 `XSH-n20-k4` instances in `09-routing` solved to **100% proven optimality (`55/55`)** using two complementary algorithms that exploit the exact 100% tight-capacity structure ($\\sum_{{i=1}}^{{20}} d_i = 4 Q$):
 
 1. **`TC-Exact` (Tight-Capacity Bitwise Set-Partitioning + Held-Karp DP):**
-   - Enumerates all single-vehicle subsets $S \\subseteq \\{{1,\\dots,20\\}}$ satisfying $\\sum_{{i \\in S}} d_i = Q$ (between 300 and 961 subsets per instance) and computes their exact optimal TSP tour cost via bitwise Held-Karp dynamic programming.
-   - Solves the 4-vehicle exact cover problem $S_1 \\sqcup S_2 \\sqcup S_3 \\sqcup S_4 = \\{{1,\\dots,20\\}}$ deterministically using lowest-set-bit (`__builtin_ctz`) symmetry breaking and $O(1)$ complement bitmask lookup.
-   - Certifies global optimality across all 55 instances (including certifying `Cost = 842` as globally optimal on `XSH-n20-k4-21`) in **~210 ms total campaign runtime** (~3.8 ms per instance).
+   - Enumerates all single-vehicle subsets $S \\subseteq \\{{1,\\dots,20\\}}$ satisfying $\\sum_{{i \\in S}} d_i = Q$ (between {min_sub} and {max_sub} subsets per instance) and computes their exact optimal TSP tour cost via bitwise Held-Karp dynamic programming.
+   - Solves the 4-vehicle exact cover problem $S_1 \\sqcup S_2 \\sqcup S_3 \\sqcup S_4 = \\{{1,\\dots,20\\}}$ deterministically using lowest-set-bit (`__builtin_ctz`) symmetry breaking and $O(1)$ complement bitmask lookup across all valid 4-way partitions (between {min_part} and {max_part:,} partitions per instance).
+   - Certifies global optimality across all 55 instances (including certifying `Cost = 842` as globally optimal on `XSH-n20-k4-21`) in **{total_tc_s*1000.0:.1f} ms total campaign runtime** (**{mean_tc_ms:.2f} ms** mean per instance).
 2. **`SQA-Subspace` (Subspace-Guided Simulated Quantum Annealing via Path-Integral Monte Carlo):**
    - Projects the CVRP onto the feasible tight-capacity partition manifold and evolves $P = 16$ Trotter replicas coupled along the imaginary-time dimension via $J_\\perp(t) = -\\frac{{1}}{{2}} T \\ln \\tanh(\\Gamma(t) / (P T))$.
    - Uses multi-scale 2-route, 3-route, and 4-route quantum tunneling transitions to escape deep local minima (such as the `Cost = 843` trap on `XSH-n20-k4-21`).
-   - Reaches the global optimum on **{sqa_opt_count} / 55 instances** across 5 runs of 1000 sweeps per instance (~22 ms mean runtime per run).
+   - Reaches the global optimum on **{sqa_opt_count} / 55 instances** across 5 runs of 1000 sweeps per instance (**{mean_sqa_ms:.1f} ms** mean runtime per run).
 
 ## Summary Results (55 instances)
 
@@ -191,8 +200,8 @@ All 55 `XSH-n20-k4` instances in `09-routing` solved to **100% proven optimality
 | Instances solved to feasibility | **55 / 55 (100%)** | **55 / 55 (100%)** |
 | Instances solved to proven optimum | **55 / 55 (100%)** | **{sqa_opt_count} / 55 ({100.0*sqa_opt_count/55:.1f}%)** |
 | Mean gap to optimum | **0.00 %** | **0.00 %** |
-| Mean per-instance runtime | **3.83 ms** | **22.4 ms** |
-| Full 55-instance campaign runtime | **0.21 s** | **1.23 s (per run)** |
+| Mean per-instance runtime | **{mean_tc_ms:.2f} ms** | **{mean_sqa_ms:.1f} ms** |
+| Full 55-instance campaign runtime | **{total_tc_s:.2f} s** | **{total_sqa_s:.2f} s (per run)** |
 
 Per-instance figures are in [`campaign_summary.csv`](campaign_summary.csv).
 
