@@ -185,12 +185,12 @@ git clone https://github.com/ZIB-AOPT/QOBLIB.git ../QOBLIB   # if not already pr
 clang++ -O3 -std=c++17 src/generate_submission_data.cpp -o build_campaign
 ./build_campaign ../QOBLIB/09-routing/instances campaign_results.json
 
-# 2. Package the QOBLIB-compliant submission directory
+# 2. Package the QOBLIB-compliant submission directory (defaults to TC-Exact for PR #93)
 python3 scripts/build_submission.py --results campaign_results.json \
-    --out ../QOBLIB/09-routing/submissions/20261017_TightSubspaceSQA_TCExact_Vuong
+    --out ../QOBLIB/09-routing/submissions/20261017_TCExact_Vuong
 
 # 3. Validate with the official QOBLIB checker
-(cd ../QOBLIB && python3 misc/ci/check_submission.py 09-routing/submissions/20261017_TightSubspaceSQA_TCExact_Vuong)
+(cd ../QOBLIB && python3 misc/ci/check_submission.py 09-routing/submissions/20261017_TCExact_Vuong)
 ```
 
 All random seeds are fixed, so objective values, success counts and traces are reproduced exactly; only wall-clock timings vary with hardware.

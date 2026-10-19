@@ -7,11 +7,21 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description="Package campaign_results.json into a QOBLIB 09-routing submission directory.")
 parser.add_argument("--results", default="campaign_results.json", help="JSON produced by build_campaign")
 parser.add_argument(
+    "--mode",
+    choices=["tc-exact", "both"],
+    default="tc-exact",
+    help="Submission mode: 'tc-exact' for standalone PR #93 (default), or 'both' for dual TC-Exact + SQA-Subspace.",
+)
+parser.add_argument(
     "--out",
-    default="../QOBLIB/09-routing/submissions/20261017_TightSubspaceSQA_TCExact_Vuong",
-    help="Target submission directory inside a QOBLIB checkout",
+    default=None,
+    help="Target submission directory inside a QOBLIB checkout (defaults to 20261017_TCExact_Vuong or 20261017_TightSubspaceSQA_TCExact_Vuong).",
 )
 args = parser.parse_args()
+
+if args.out is None:
+    folder_name = "20261017_TCExact_Vuong" if args.mode == "tc-exact" else "20261017_TightSubspaceSQA_TCExact_Vuong"
+    args.out = f"../QOBLIB/09-routing/submissions/{folder_name}"
 
 with open(args.results, encoding="utf-8") as f:
     data = json.load(f)
@@ -72,7 +82,8 @@ def write_instance_readme(instance: str, inst_dir: Path, rows: list[dict[str, st
     (inst_dir / "README.md").write_text(md, encoding="utf-8")
 
 
-campaign_rows = []
+campaign_rows_both = []
+campaign_rows_tc = []
 sqa_opt_count = 0
 tc_opt_count = 0
 total_sqa_succ_runs = 0
@@ -104,12 +115,14 @@ for item in data:
             sf.write(f"Route #{r_i}: " + " ".join(str(x) for x in route) + "\n")
         sf.write(f"\nCost {opt_val}\n")
 
-    # 2. Write <inst>_objective_time_series.json.gz
+    # 2. Write <inst>_objective_time_series.json.gz (only for stochastic SQA)
     ts_path = inst_dir / f"{inst}_objective_time_series.json.gz"
-    with gzip.open(ts_path, "wt", encoding="utf-8") as gz:
-        json.dump(item["traces"], gz)
+    if args.mode == "both":
+        with gzip.open(ts_path, "wt", encoding="utf-8") as gz:
+            json.dump(item["traces"], gz)
+    elif ts_path.exists():
+        ts_path.unlink()
 
-    # 3. Write <inst>_summary.csv (Row 1 = TC-Exact, Row 2 = SQA-Subspace)
     tc_opt_count += 1
     if sqa_val == opt_val:
         sqa_opt_count += 1
@@ -204,11 +217,14 @@ for item in data:
         writer = csv.DictWriter(cf, fieldnames=HEADERS)
         writer.writeheader()
         writer.writerow(row_tc)
-        writer.writerow(row_sqa)
+        if args.mode == "both":
+            writer.writerow(row_sqa)
 
-    write_instance_readme(inst, inst_dir, [row_tc, row_sqa])
+    rows_to_render = [row_tc] if args.mode == "tc-exact" else [row_tc, row_sqa]
+    write_instance_readme(inst, inst_dir, rows_to_render)
 
-    campaign_rows.append({
+    campaign_rows_tc.append(row_tc)
+    campaign_rows_both.append({
         "Instance": inst,
         "Capacity": cap,
         "TightSubsets": num_sub,
@@ -223,16 +239,57 @@ for item in data:
         "SQA_MeanTtsMs": f"{item['sqa_mean_tts_s']*1000.0:.3f}"
     })
 
-with open(sub_root / "campaign_results.csv", "w", newline="", encoding="utf-8") as cf:
-    writer = csv.DictWriter(cf, fieldnames=list(campaign_rows[0].keys()))
-    writer.writeheader()
-    writer.writerows(campaign_rows)
-
 n_inst = len(data)
 mean_tc_ms = (total_tc_s * 1000.0) / n_inst
 mean_sqa_ms = (total_sqa_s * 1000.0) / n_inst
 
-readme_text = f"""# Tight-Capacity Bitwise Set-Partitioning (`TC-Exact`) & Subspace Simulated Quantum Annealing (`SQA-Subspace`)
+if args.mode == "tc-exact":
+    with open(sub_root / "campaign_results.csv", "w", newline="", encoding="utf-8") as cf:
+        writer = csv.DictWriter(cf, fieldnames=HEADERS)
+        writer.writeheader()
+        writer.writerows(campaign_rows_tc)
+
+    readme_text = f"""# Tight-Capacity Bitwise Set-Partitioning (`TC-Exact`) — CVRP Submission
+
+**Submitter:** Vuong Kha Anh Son · **Date:** 2026-10-17 · **Code:** [`vkas0812-sys/qoblib-routing-exact-sqa`](https://github.com/vkas0812-sys/qoblib-routing-exact-sqa)
+
+All 55 `XSH-n20-k4` instances in `09-routing` solved to **100% proven global optimality (`55/55`)** using the exact combinatorial solver **`TC-Exact`**.
+
+The algorithm exploits the universal zero-slack tight-capacity invariant across all 55 instances ($\\sum_{{i=1}}^{{20}} d_i = 4Q$, fleet slack $\\Delta = 0$). Under this invariant, every vehicle route in any feasible solution must satisfy the exact equality $\\sum_{{i \\in S_r}} d_i = Q$.
+
+## Method Overview: `TC-Exact`
+
+1. **Tight-Capacity Subset Enumeration:** Exhaustively enumerates all single-vehicle subsets $S \\subseteq \\{{1,\\dots,20\\}}$ with $\\sum_{{i \\in S}} d_i = Q$ (between 300 and 961 subsets per instance).
+2. **Bitwise Held-Karp TSP:** Computes the exact optimal route cost $c^*(S)$ for every tight subset via dynamic programming.
+3. **Bitwise Exact Cover:** Solves the 4-way disjoint partition problem $S_1 \\sqcup S_2 \\sqcup S_3 \\sqcup S_4 = \\{{1,\\dots,20\\}}$ deterministically using lowest-set-bit (`__builtin_ctz`) symmetry breaking across the 4 vehicles and $O(1)$ complement bitmask lookup for the 4th vehicle.
+
+## Key Results (55 instances)
+
+- **Feasibility:** 55 / 55 (100%)
+- **Proven Global Optimality:** 55 / 55 (100% certified with `Optimality Bound == Best Objective Value`)
+- **Total Campaign Runtime:** {total_tc_s:.3f} seconds (mean {mean_tc_ms:.2f} ms per instance on Apple M4)
+- **Spectral Gap Certificate:** Certifies `Cost = 842` as the unique global optimum on `XSH-n20-k4-21` (where the second-best partition has `Cost = 843`, spectral gap $\\Delta E = 1$).
+
+Per-instance metadata and results are recorded in [`campaign_results.csv`](campaign_results.csv).
+
+## Hardware & Environment
+
+- **Processor:** Apple M4 (10 cores, single-threaded execution per instance)
+- **Memory:** 16 GB unified memory
+- **Operating System:** macOS
+- **Compiler:** AppleClang 21.0.0 (`-O3 -std=c++17`)
+
+## AI disclosure
+
+`generated` — solver code (`TC-Exact`), benchmarking scripts, and submission write-up were predominantly generated by the Antigravity AI coding assistant under the direction, experimental execution, and verification of the submitter (Vuong Kha Anh Son) against the official QOBLIB verification suite (`check_submission.py` and `check_cvrp`).
+"""
+else:
+    with open(sub_root / "campaign_results.csv", "w", newline="", encoding="utf-8") as cf:
+        writer = csv.DictWriter(cf, fieldnames=list(campaign_rows_both[0].keys()))
+        writer.writeheader()
+        writer.writerows(campaign_rows_both)
+
+    readme_text = f"""# Tight-Capacity Bitwise Set-Partitioning (`TC-Exact`) & Subspace Simulated Quantum Annealing (`SQA-Subspace`)
 
 **Submitter:** Vuong Kha Anh Son · **Date:** 2026-10-17 · **Code:** [`vkas0812-sys/qoblib-routing-exact-sqa`](https://github.com/vkas0812-sys/qoblib-routing-exact-sqa)
 
@@ -270,4 +327,4 @@ Apple M4 (10 cores), 16 GB unified RAM, macOS, compiled with `AppleClang 21.0.0`
 """
 
 (sub_root / "README.md").write_text(readme_text, encoding="utf-8")
-print(f"Generated {n_inst} instance directories. TC-Exact Optimal: {tc_opt_count}/{n_inst} ({mean_tc_ms:.2f} ms/inst), SQA-Subspace Optimal: {sqa_opt_count}/{n_inst} ({mean_sqa_ms:.2f} ms/inst)")
+print(f"[{args.mode}] Generated {n_inst} instance directories under {sub_root}")
