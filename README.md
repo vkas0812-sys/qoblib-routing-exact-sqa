@@ -19,6 +19,21 @@ Building on this invariant, this repository provides two complementary solvers i
 
 ---
 
+## Documentation (`docs/`)
+
+Detailed technical documentation is organized in the [`docs/`](docs/) directory:
+
+| Document | Contents |
+| :--- | :--- |
+| **[`docs/references.md`](docs/references.md)** | Full bibliography (QOBLIB, Queiroga & Uchoa 2024, Uchoa et al. 2017, Held-Karp, PIMC-SQA), official QOBLIB & PR #93 links, project lineage, and BibTeX citation |
+| **[`docs/background.md`](docs/background.md)** | Problem class `09-routing` (`XSH-n20-k4`), MIP & QUBO formulations, quadratic penalty barriers under $\Delta = 0$, BKS origins, and Suzuki-Trotter PIMC physics |
+| **[`docs/methods.md`](docs/methods.md)** | Architecture of `TC-Exact` (exact optimality certificates, scaling, standalone PR #93 packaging) and `SQA-Subspace` (hyperparameters, multi-route tunneling, limitations) |
+| **[`docs/reproducibility.md`](docs/reproducibility.md)** | System requirements, step-by-step build/run commands, `test_reproducibility.sh` guide, deterministic random seeds, and source/script comparisons |
+| **[`docs/results.md`](docs/results.md)** | Column-by-column guide to `campaign_summary.csv`, Figure 1 (`fig1_sqa_analysis.pdf`) analysis, BKS comparison (`XSH-n20-k4-21` closure), and Apple M4 runtime breakdown |
+| **[`CITATION.cff`](CITATION.cff)** | Standard Citation File Format metadata for citing this repository |
+
+---
+
 ## 1. Mathematical Formulation & Structural Invariant
 
 ### 1.1. Zero-Slack Tight-Capacity Invariant

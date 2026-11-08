@@ -1,2 +1,10 @@
 ._*
 .DS_Store
+build_campaign
+run_experiments
+check_cvrp
+campaign_results.json
+campaign_test_results.json
+live_benchmark_results.json
+test_21.sol
+fig1_sqa_analysis.pdf

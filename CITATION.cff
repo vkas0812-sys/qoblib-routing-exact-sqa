@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software or benchmark results, please cite it using the metadata below."
+type: software
+title: "QOBLIB 09-routing (CVRP) Benchmark: Exact Optimality Certificates (TC-Exact) and Subspace Simulated Quantum Annealing (SQA-Subspace)"
+authors:
+  - family-names: "Vuong"
+    given-names: "Kha Anh Son"
+    email: "anhson.vuongkha@gmail.com"
+    affiliation: "Independent Researcher"
+version: "v1.2"
+date-released: "2026-10-19"
+url: "https://github.com/vkas0812-sys/qoblib-routing-exact-sqa"
+repository-code: "https://github.com/vkas0812-sys/qoblib-routing-exact-sqa"
+license: Apache-2.0
+keywords:
+  - QOBLIB
+  - Capacitated Vehicle Routing Problem
+  - CVRP
+  - Set Partitioning
+  - Held-Karp Dynamic Programming
+  - Simulated Quantum Annealing
+  - Path-Integral Monte Carlo
+  - QUBO
