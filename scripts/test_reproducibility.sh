@@ -24,6 +24,10 @@ TMP_DIR="$(mktemp -d /tmp/qoblib_test_XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo ""
+echo "[Step 0/4] Running mechanical harness & doc-gardening linter..."
+python3 "$REPO_ROOT/scripts/check_harness_invariants.py"
+
+echo ""
 echo "[Step 1/4] Compiling TC-Exact solver from source..."
 clang++ -O3 -std=c++17 "$REPO_ROOT/src/generate_submission_data.cpp" -o "$TMP_DIR/build_campaign"
 echo "           -> Compilation successful."

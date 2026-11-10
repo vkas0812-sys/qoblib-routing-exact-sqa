@@ -21,10 +21,13 @@ Building on this invariant, this repository provides two complementary solvers i
 
 ## Documentation (`docs/`)
 
-Detailed technical documentation is organized in the [`docs/`](docs/) directory:
+Detailed technical documentation is organized in the [`docs/`](docs/index.md) directory (with [`AGENTS.md`](AGENTS.md) as the concise agent entry-point map and [`ARCHITECTURE.md`](ARCHITECTURE.md) as the system dependency map):
 
 | Document | Contents |
 | :--- | :--- |
+| **[`AGENTS.md`](AGENTS.md)** | Concise Table-of-Contents map (~85 lines) for AI coding agents & 32-question routing guide |
+| **[`ARCHITECTURE.md`](ARCHITECTURE.md)** | 5-layer pipeline diagram, dependency rules, JSON/CSV data schemas, and boundary invariants |
+| **[`docs/index.md`](docs/index.md)** | Master knowledge-store index, verification status, and links to [`docs/core-beliefs.md`](docs/core-beliefs.md) & [`docs/QUALITY_SCORE.md`](docs/QUALITY_SCORE.md) |
 | **[`docs/references.md`](docs/references.md)** | Full bibliography (QOBLIB, Queiroga & Uchoa 2024, Uchoa et al. 2017, Held-Karp, PIMC-SQA), official QOBLIB & PR #93 links, project lineage, and BibTeX citation |
 | **[`docs/background.md`](docs/background.md)** | Problem class `09-routing` (`XSH-n20-k4`), MIP & QUBO formulations, quadratic penalty barriers under $\Delta = 0$, BKS origins, and Suzuki-Trotter PIMC physics |
 | **[`docs/methods.md`](docs/methods.md)** | Architecture of `TC-Exact` (exact optimality certificates, scaling, standalone PR #93 packaging) and `SQA-Subspace` (hyperparameters, multi-route tunneling, limitations) |
@@ -141,7 +144,7 @@ On `XSH-n20-k4-21` ($Q = 275$, $\lvert\mathcal{F}_1\rvert = 458$ tight subsets, 
 | `XSH-n20-k4-14` | 267 | 455 | 1,473 | **696** | 697 | 2.29 | **696** | 5/5 | 5.7 |
 | `XSH-n20-k4-15` | 257 | 500 | 2,895 | **780** | 782 | 2.56 | **780** | 5/5 | 12.2 |
 | `XSH-n20-k4-16` | 230 | 602 | 5,187 | **830** | 831 | 2.76 | **830** | 5/5 | 32.9 |
-| `XSH-n20-k4-17` | 253 | 454 | 2,311 | **605** | 612 | 1.45 | **605** | 5/5 | 8.9 |
+| `XSH-n20-k4-17` | 253 | 454 | 2,311 | **605** | 612 | 1.46 | **605** | 5/5 | 8.9 |
 | `XSH-n20-k4-18` | 257 | 530 | 2,472 | **997** | 1003 | 2.86 | **997** | 5/5 | 10.3 |
 | `XSH-n20-k4-19` | 269 | 448 | 1,675 | **976** | 987 | 1.48 | **976** | 5/5 | 5.5 |
 | `XSH-n20-k4-20` | 276 | 426 | 1,668 | **648** | 650 | 1.45 | **648** | 5/5 | 5.6 |
